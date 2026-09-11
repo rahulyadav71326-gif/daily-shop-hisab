@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Daily Shop Hisab</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f3f6fb;color:#172033}
+header{background:linear-gradient(135deg,#111827,#243b53);color:white;padding:22px 16px}
+header h1{margin:0;font-size:23px}header p{margin:6px 0 0;color:#cbd5e1;font-size:13px}
+.container{max-width:700px;margin:auto;padding:14px}
+.card{background:white;border-radius:16px;padding:16px;margin-bottom:14px;box-shadow:0 5px 18px #0000000d}
+.card h2{font-size:17px;margin:0 0 13px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+label{font-size:12px;color:#64748b;display:block;margin-bottom:5px}
+input,select{width:100%;padding:12px;border:1px solid #dbe2ea;border-radius:10px;font-size:15px;outline:none}
+input:focus,select:focus{border-color:#2563eb}
+.btn{border:0;border-radius:10px;padding:12px 15px;font-weight:bold;cursor:pointer}
+.primary{background:#2563eb;color:white}.danger{background:#fee2e2;color:#b91c1c}
+.row{display:flex;gap:8px;align-items:end}.row>*{flex:1}
+.summary{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.stat{padding:13px;border-radius:12px;background:#f8fafc;border:1px solid #e8edf3}
+.stat b{display:block;font-size:19px;margin-top:5px}
+.sale{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #eef2f7;padding:11px 0}
+.sale:last-child{border-bottom:0}.small{font-size:12px;color:#64748b}
+.total{font-size:20px;font-weight:bold}
+.badge{padding:5px 8px;border-radius:8px;font-size:11px;background:#e0e7ff;color:#3730a3}
+.tabs{display:flex;gap:8px;overflow:auto;margin-bottom:14px}.tab{white-space:nowrap;background:white;border:1px solid #dbe2ea;padding:9px 12px;border-radius:20px}.tab.active{background:#111827;color:white}
+.hidden{display:none}.muted{color:#64748b}.green{color:#15803d}.red{color:#dc2626}
+@media(max-width:520px){.grid,.summary{grid-template-columns:1fr}.row{flex-direction:column;align-items:stretch}}
+</style>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body>
+<header><div class="container"><h1>🏪 Daily Shop Hisab</h1><p>Daily Sales • Cash • Online • Pay One Money Transfer</p></div></header>
+<div class="container">
+<div class="tabs">
+<button class="tab active" onclick="showTab('day',this)">📒 Today's Hisab</button>
+<button class="tab" onclick="showTab('money',this)">💸 Pay One Transfer</button>
+<button class="tab" onclick="showTab('history',this)">📅 History</button>
+<button class="tab" onclick="showTab('cloud',this)">☁️ Cloud Sync</button>
+</div>
+
+<section id="day">
+<div class="card">
+<h2>🌅 Opening Balance</h2>
+<div class="grid">
+<div><label>Opening Cash ₹</label><input id="openCash" type="number" min="0" placeholder="5000"></div>
+<div><label>Opening Online ₹</label><input id="openOnline" type="number" min="0" placeholder="8000"></div>
+</div>
+<button class="btn primary" style="margin-top:12px;width:100%" onclick="saveOpening()">Save Opening</button>
+</div>
+
+<div class="card">
+<h2>🛒 Add Sale</h2>
+<div class="row">
+<div><label>Item / Product</label><input id="item" placeholder="Fevicol"></div>
+<div><label>Amount ₹</label><input id="amount" type="number" min="0" placeholder="10"></div>
+<div><label>Payment</label><select id="mode"><option>Cash</option><option>Online</option></select></div>
+<button class="btn primary" onclick="addSale()">+ Add</button>
+</div>
+<div id="salesList" style="margin-top:8px"></div>
+</div>
+
+<div class="card">
+<h2>📊 Today's Summary</h2>
+<div class="summary">
+<div class="stat">💵 Cash Sales<b id="cashSales">₹0</b></div>
+<div class="stat">📱 Online Sales<b id="onlineSales">₹0</b></div>
+<div class="stat">🧾 Total Sales<b id="totalSales">₹0</b></div>
+<div class="stat">🔢 Entries<b id="entryCount">0</b></div>
+</div>
+</div>
+
+<div class="card">
+<h2>🌙 Closing Balance</h2>
+<div class="grid">
+<div><label>Actual Closing Cash ₹</label><input id="closeCash" type="number" min="0" placeholder="7700"></div>
+<div><label>Actual Closing Online ₹</label><input id="closeOnline" type="number" min="0" placeholder="9550"></div>
+</div>
+<button class="btn primary" style="margin-top:12px;width:100%" onclick="calculateClosing()">Calculate Closing</button>
+<div id="closingResult" style="margin-top:14px"></div>
+</div>
+</section>
+
+<section id="money" class="hidden">
+<div class="card">
+<h2>💸 PAY ONE MONEY TRANSFER</h2>
+<p class="small">Company se balance receive aur customer transfer ka separate record.</p>
+<div class="row">
+<div><label>Company se Balance Received ₹</label><input id="received" type="number" min="0" placeholder="10000"></div>
+<div><label>Note</label><input id="receivedNote" placeholder="Company balance"></div>
+<button class="btn primary" onclick="addTransfer('received')">+ Add</button>
+</div>
+<hr style="border:0;border-top:1px solid #eef2f7;margin:16px 0">
+<div class="row">
+<div><label>Customer ko Transfer ₹</label><input id="sent" type="number" min="0" placeholder="2000"></div>
+<div><label>Note / Customer</label><input id="sentNote" placeholder="Customer A"></div>
+<button class="btn primary" onclick="addTransfer('sent')">+ Add</button>
+</div>
+</div>
+<div class="card">
+<div class="summary">
+<div class="stat">📥 Total Received<b id="receivedTotal">₹0</b></div>
+<div class="stat">📤 Total Transferred<b id="sentTotal">₹0</b></div>
+<div class="stat">💰 Transfer Balance<b id="transferBalance">₹0</b></div>
+<div class="stat">🔢 Entries<b id="transferCount">0</b></div>
+</div>
+</div>
+<div class="card"><h2>📜 Transfer History</h2><div id="transferList"><span class="muted">No entries yet.</span></div></div>
+</section>
+
+<section id="history" class="hidden">
+<div class="card"><h2>📅 Saved Days</h2><div id="historyList"><span class="muted">No saved day yet.</span></div></div>
+</section>
+
+<section id="cloud" class="hidden">
+<div class="card">
+<h2>☁️ Multi-Phone Cloud Sync</h2>
+<p class="small">Same shop ka hisab 2 ya zyada phones par live sync karne ke liye Firebase connect karo.</p>
+<div id="cloudStatus" class="stat" style="margin:10px 0">🔴 Cloud not connected</div>
+<div class="grid">
+<div><label>Firebase API Key</label><input id="fbApiKey" placeholder="AIza..."></div>
+<div><label>Auth Domain</label><input id="fbAuthDomain" placeholder="your-project.firebaseapp.com"></div>
+<div><label>Database URL</label><input id="fbDatabaseURL" placeholder="https://your-project-default-rtdb.firebaseio.com"></div>
+<div><label>Project ID</label><input id="fbProjectId" placeholder="your-project-id"></div>
+<div><label>App ID</label><input id="fbAppId" placeholder="1:123:web:abc"></div>
+<div><label>Shop ID (same on both phones)</label><input id="shopId" placeholder="my-shop-001"></div>
+</div>
+<div class="row" style="margin-top:12px">
+<button class="btn primary" onclick="connectFirebase()">☁️ Connect & Sync</button>
+<button class="btn" onclick="showFirebaseHelp()">❓ Setup Help</button>
+</div>
+<p class="small" style="margin-top:10px">Tip: Dono phones me <b>same Shop ID</b> aur same Firebase project use karna hai.</p>
+</div>
+</section>
+</div>
+
+<script>
+const todayKey=()=>new Date().toISOString().slice(0,10);
+let data=JSON.parse(localStorage.getItem('shopHisab')||'{}');
+let key=todayKey();
+if(!data[key]) data[key]={opening:{cash:0,online:0},sales:[],closing:null};
+let transfers=JSON.parse(localStorage.getItem('payOneTransfers')||'[]');
+let fb=null, fbDb=null, fbRef=null, fbReady=false, fbApplying=false;
+const fbSaved=JSON.parse(localStorage.getItem('shopFirebaseConfig')||'null');
+function money(n){return '₹'+Number(n||0).toLocaleString('en-IN',{maximumFractionDigits:2})}
+function save(){localStorage.setItem('shopHisab',JSON.stringify(data));localStorage.setItem('payOneTransfers',JSON.stringify(transfers)); cloudPush();}
+function cloudPush(){ if(!fbReady||fbApplying||!fbRef) return; fbRef.set({data:data,transfers:transfers,updatedAt:Date.now()}).catch(e=>setCloudStatus('🔴 Sync error: '+e.message)); }
+function setCloudStatus(t){let el=document.getElementById('cloudStatus');if(el)el.textContent=t;}
+function fillFirebaseForm(c){if(!c)return;fbApiKey.value=c.apiKey||'';fbAuthDomain.value=c.authDomain||'';fbDatabaseURL.value=c.databaseURL||'';fbProjectId.value=c.projectId||'';fbAppId.value=c.appId||'';shopId.value=c.shopId||'my-shop-001';}
+if(fbSaved) setTimeout(()=>fillFirebaseForm(fbSaved),50);
+function connectFirebase(){
+ const c={apiKey:fbApiKey.value.trim(),authDomain:fbAuthDomain.value.trim(),databaseURL:fbDatabaseURL.value.trim(),projectId:fbProjectId.value.trim(),appId:fbAppId.value.trim(),shopId:shopId.value.trim()||'my-shop-001'};
+ if(!c.apiKey||!c.authDomain||!c.databaseURL||!c.projectId||!c.appId){alert('Firebase config ke saare fields bharo. Setup Help me steps diye hain.');return;}
+ setCloudStatus('🟡 Connecting...'); fbReady=false;
+ try{
+   if(fbRef) try{fbRef.off();}catch(e){}
+   if(fb) try{fb.delete();}catch(e){}
+   fb=firebase.initializeApp({apiKey:c.apiKey,authDomain:c.authDomain,databaseURL:c.databaseURL,projectId:c.projectId,appId:c.appId});
+   fbDb=firebase.database(); fbRef=fbDb.ref('shops/'+c.shopId);
+   localStorage.setItem('shopFirebaseConfig',JSON.stringify(c));
+   const authPromise=firebase.auth().signInAnonymously();
+   const timeout=new Promise((_,reject)=>setTimeout(()=>reject(new Error('Connection timeout. Check internet/network access and Anonymous Auth.')),12000));
+   Promise.race([authPromise,timeout]).then(()=>{
+      fbReady=true; setCloudStatus('🟢 Cloud connected • Live sync ON');
+      fbRef.off('value');
+      fbRef.on('value',snap=>{
+        const v=snap.val(); if(!v)return;
+        fbApplying=true; if(v.data)data=v.data; if(v.transfers)transfers=v.transfers;
+        localStorage.setItem('shopHisab',JSON.stringify(data)); localStorage.setItem('payOneTransfers',JSON.stringify(transfers));
+        key=todayKey(); if(!data[key])data[key]={opening:{cash:0,online:0},sales:[],closing:null};
+        render(); renderTransfers(); fbApplying=false;
+      },err=>setCloudStatus('🔴 Sync error: '+err.message));
+      cloudPush();
+   }).catch(e=>{fbReady=false; setCloudStatus('🔴 '+e.message); alert('Firebase connect nahi hua: '+e.message);});
+ }catch(e){setCloudStatus('🔴 Firebase config error: '+e.message); alert('Firebase config check karo: '+e.message);}
+}
+
+function showFirebaseHelp(){alert('FIREBASE SETUP (sirf ek baar):\n1) Firebase Console me new project banao.\n2) Web App (</>) add karo aur Firebase config copy karo.\n3) Authentication → Sign-in method → Anonymous → Enable.\n4) Realtime Database → Create Database → test/locked mode me create karo.\n5) Database Rules me authenticated users ko access do.\n6) Config ke 5 fields yahan paste karo.\n7) Same Shop ID dono phones me rakho.\n\nImportant: Database URL Realtime Database ka URL hona chahiye.');}
+
+function saveOpening(){data[key].opening={cash:+openCash.value||0,online:+openOnline.value||0};save();render();alert('Opening balance saved.')}
+function addSale(){
+ let name=item.value.trim(), val=+amount.value||0;
+ if(!name||val<=0)return alert('Item aur amount enter karo.');
+ data[key].sales.push({id:Date.now(),name,amount:val,mode:mode.value,time:new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})});
+ item.value='';amount.value='';save();render();
+}
+function deleteSale(id){data[key].sales=data[key].sales.filter(x=>x.id!==id);save();render()}
+function addTransfer(type){
+ let el=type==='received'?received:sent, noteEl=type==='received'?receivedNote:sentNote, val=+el.value||0;
+ if(val<=0)return alert('Amount enter karo.');
+ transfers.push({id:Date.now(),type,amount:val,note:noteEl.value.trim(),time:new Date().toLocaleString('en-IN')});
+ el.value='';noteEl.value='';save();renderTransfers();
+}
+function deleteTransfer(id){transfers=transfers.filter(x=>x.id!==id);save();renderTransfers()}
+function calculateClosing(){
+ data[key].closing={cash:+closeCash.value||0,online:+closeOnline.value||0};save();renderClosing();
+}
+function render(){
+ let d=data[key], cs=d.sales.filter(x=>x.mode==='Cash').reduce((a,x)=>a+x.amount,0), os=d.sales.filter(x=>x.mode==='Online').reduce((a,x)=>a+x.amount,0);
+ openCash.value=d.opening.cash||'';openOnline.value=d.opening.online||'';
+ cashSales.textContent=money(cs);onlineSales.textContent=money(os);totalSales.textContent=money(cs+os);entryCount.textContent=d.sales.length;
+ salesList.innerHTML=d.sales.length?d.sales.slice().reverse().map(x=>`<div class="sale"><div><b>${esc(x.name)}</b><div class="small">${x.time} • <span class="badge">${x.mode}</span></div></div><div><b>${money(x.amount)}</b> <button class="btn danger" onclick="deleteSale(${x.id})">×</button></div></div>`).join(''):'<span class="muted">Abhi koi sale entry nahi hai.</span>';
+ if(d.closing){closeCash.value=d.closing.cash;closeOnline.value=d.closing.online;renderClosing()}
+ renderHistory();
+}
+function renderClosing(){
+ let d=data[key]; if(!d.closing){closingResult.innerHTML='';return}
+ let cs=d.sales.filter(x=>x.mode==='Cash').reduce((a,x)=>a+x.amount,0), os=d.sales.filter(x=>x.mode==='Online').reduce((a,x)=>a+x.amount,0);
+ let ec=d.opening.cash+cs, eo=d.opening.online+os, dc=d.closing.cash-ec, doo=d.closing.online-eo;
+ closingResult.innerHTML=`<div class="summary">
+<div class="stat">Expected Cash<b>${money(ec)}</b></div><div class="stat">Actual Cash<b>${money(d.closing.cash)}</b></div>
+<div class="stat">Expected Online<b>${money(eo)}</b></div><div class="stat">Actual Online<b>${money(d.closing.online)}</b></div>
+<div class="stat">Cash Difference<b class="${dc>=0?'green':'red'}">${dc>=0?'+':''}${money(dc)}</b></div>
+<div class="stat">Online Difference<b class="${doo>=0?'green':'red'}">${doo>=0?'+':''}${money(doo)}</b></div>
+</div>`;
+}
+function renderTransfers(){
+ let r=transfers.filter(x=>x.type==='received').reduce((a,x)=>a+x.amount,0), s=transfers.filter(x=>x.type==='sent').reduce((a,x)=>a+x.amount,0);
+ receivedTotal.textContent=money(r);sentTotal.textContent=money(s);transferBalance.textContent=money(r-s);transferCount.textContent=transfers.length;
+ transferList.innerHTML=transfers.length?transfers.slice().reverse().map(x=>`<div class="sale"><div><b>${x.type==='received'?'📥 Company Received':'📤 Customer Transfer'}</b><div class="small">${esc(x.note||'No note')} • ${x.time}</div></div><div><b>${money(x.amount)}</b> <button class="btn danger" onclick="deleteTransfer(${x.id})">×</button></div></div>`).join(''):'<span class="muted">No entries yet.</span>';
+}
+function invoiceHTML(date){
+ const d=data[date]; if(!d) return '';
+ const cash=d.sales.filter(x=>x.mode==='Cash').reduce((a,x)=>a+Number(x.amount||0),0);
+ const online=d.sales.filter(x=>x.mode==='Online').reduce((a,x)=>a+Number(x.amount||0),0);
+ const total=cash+online;
+ const rows=d.sales.map((x,i)=>`<tr><td>${i+1}</td><td>${esc(x.name)}</td><td>${esc(x.mode)}</td><td>₹${Number(x.amount||0).toLocaleString('en-IN')}</td></tr>`).join('');
+ return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Shop Invoice ${date}</title><style>body{font-family:Arial,sans-serif;margin:0;padding:24px;color:#111}main{max-width:800px;margin:auto}h1{text-align:center;margin:0 0 8px}h3{margin:4px 0 18px;text-align:center;color:#555}table{width:100%;border-collapse:collapse;margin:20px 0}th,td{border:1px solid #ddd;padding:9px;text-align:left}th:last-child,td:last-child{text-align:right}.summary{margin-top:18px;border-top:2px solid #111;padding-top:12px}.row{display:flex;justify-content:space-between;padding:6px 0}.total{font-size:20px;font-weight:bold}.print{display:block;margin:20px auto;padding:12px 20px;border:0;border-radius:8px;background:#111;color:#fff;font-weight:bold}@media print{.print{display:none}body{padding:0}}</style></head><body><main><h1>DAILY SHOP SALES INVOICE</h1><h3>Date: ${date}</h3><table><thead><tr><th>#</th><th>Item / Product</th><th>Payment</th><th>Amount</th></tr></thead><tbody>${rows}</tbody></table><div class="summary"><div class="row"><span>Cash Sales</span><b>₹${cash.toLocaleString('en-IN')}</b></div><div class="row"><span>Online Sales</span><b>₹${online.toLocaleString('en-IN')}</b></div><div class="row total"><span>TOTAL SALES</span><span>₹${total.toLocaleString('en-IN')}</span></div><br><div class="row"><span>Opening Cash</span><b>₹${Number(d.opening.cash||0).toLocaleString('en-IN')}</b></div><div class="row"><span>Opening Online</span><b>₹${Number(d.opening.online||0).toLocaleString('en-IN')}</b></div>${d.closing?`<div class="row"><span>Closing Cash</span><b>₹${Number(d.closing.cash||0).toLocaleString('en-IN')}</b></div><div class="row"><span>Closing Online</span><b>₹${Number(d.closing.online||0).toLocaleString('en-IN')}</b></div>`:''}</div><button class="print" onclick="window.print()">Print / Save as PDF</button></main></body></html>`;
+}
+
+function renderHistory(){
+ let keys=Object.keys(data).sort().reverse();
+ historyList.innerHTML=keys.length?keys.map(k=>{let d=data[k],t=d.sales.reduce((a,x)=>a+Number(x.amount||0),0);return `<div class="sale"><div><b>${k}</b><div class="small">${d.sales.length} sales entries • Total ${money(t)}</div></div><div style="display:flex;gap:6px;align-items:center"><b class="total">${money(t)}</b><button class="btn primary" onclick="openInvoice('${k}')">🧾 Invoice</button><button class="btn" onclick="downloadInvoice('${k}')">⬇ Download</button></div></div>`}).join(''):'<span class="muted">No saved day yet.</span>';
+}
+
+function openInvoice(date){
+ const html=invoiceHTML(date); if(!html) return;
+ const w=window.open('','_blank');
+ if(!w){ alert('Browser ne invoice window block ki hai. Browser settings me pop-ups allow karo.'); return; }
+ w.document.open(); w.document.write(html); w.document.close();
+}
+
+function downloadInvoice(date){
+ const html=invoiceHTML(date); if(!html) return;
+ // Always provide a reliable local download, even when the PDF library/CDN is unavailable.
+ const blob=new Blob([html],{type:'text/html;charset=utf-8'});
+ const url=URL.createObjectURL(blob); const a=document.createElement('a');
+ a.href=url; a.download='Shop_Hisab_'+date+'.html'; document.body.appendChild(a); a.click(); a.remove();
+ setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+
+
+function showTab(id,btn){document.querySelectorAll('section').forEach(x=>x.classList.add('hidden'));document.getElementById(id).classList.remove('hidden');document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));btn.classList.add('active');if(id==='money')renderTransfers();if(id==='cloud'&&fbSaved&&!fbReady) fillFirebaseForm(fbSaved)}
+function esc(s){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+render();renderTransfers();
+</script>
+</body></html>
